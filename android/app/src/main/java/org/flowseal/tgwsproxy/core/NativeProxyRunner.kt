@@ -1,6 +1,8 @@
 package org.flowseal.tgwsproxy.core
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import java.io.BufferedReader
 import java.io.File
@@ -9,9 +11,11 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class NativeProxyRunner(private val context: Context) {
 
-    private var process: Process? = null
+    @Volatile private var process: Process? = null
     private val isRunning = AtomicBoolean(false)
+    private val mainHandler = Handler(Looper.getMainLooper())
     private var logListener: ((String) -> Unit)? = null
+    private var exitListener: (() -> Unit)? = null
 
     companion object {
         private const val TAG = "NativeProxyRunner"
@@ -20,6 +24,10 @@ class NativeProxyRunner(private val context: Context) {
 
     fun setLogListener(listener: ((String) -> Unit)?) {
         this.logListener = listener
+    }
+
+    fun setExitListener(listener: (() -> Unit)?) {
+        exitListener = listener
     }
 
     fun start(
@@ -71,48 +79,61 @@ class NativeProxyRunner(private val context: Context) {
 
             val pb = ProcessBuilder(cmd)
             pb.redirectErrorStream(true)
-            process = pb.start()
+            val startedProcess = pb.start()
+            process = startedProcess
             isRunning.set(true)
 
             Thread {
-                val reader = BufferedReader(InputStreamReader(process?.inputStream))
                 try {
-                    while (isRunning.get()) {
-                        val line = reader.readLine() ?: break
-                        Log.d(TAG, line)
-                        logListener?.invoke(line)
+                    BufferedReader(InputStreamReader(startedProcess.inputStream)).use { reader ->
+                        while (process === startedProcess) {
+                            val line = reader.readLine() ?: break
+                            if (process !== startedProcess) break
+                            Log.d(TAG, line)
+                            logListener?.invoke(line)
+                        }
                     }
                 } catch (e: Exception) {
-                    if (isRunning.get()) {
+                    if (process === startedProcess) {
                         Log.e(TAG, "Log stream read exception", e)
                     }
-                } finally {
-                    reader.close()
+                }
+            }.start()
+
+            Thread {
+                val exitCode = startedProcess.waitFor()
+                mainHandler.post {
+                    if (process === startedProcess) {
+                        process = null
+                        isRunning.set(false)
+                        Log.w(TAG, "Native proxy exited with code $exitCode")
+                        exitListener?.invoke()
+                    }
                 }
             }.start()
 
             return true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to launch native proxy process", e)
+            stop()
             logListener?.invoke("Ошибка запуска: ${e.message}")
-            isRunning.set(false)
             return false
         }
     }
 
     fun stop() {
-        if (!isRunning.getAndSet(false)) return
+        isRunning.set(false)
+        val stoppedProcess = process ?: return
+        process = null
 
         Log.i(TAG, "Stopping native proxy process")
         logListener?.invoke("Остановка ядра...")
 
         try {
-            process?.destroy()
-            process?.waitFor()
+            stoppedProcess.destroy()
+            stoppedProcess.waitFor()
         } catch (e: Exception) {
             Log.e(TAG, "Error waiting for process destruction", e)
-        } finally {
-            process = null
         }
     }
 

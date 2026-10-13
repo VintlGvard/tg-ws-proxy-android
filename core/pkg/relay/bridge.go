@@ -53,6 +53,7 @@ func BridgeWS(
 				return
 			case <-ticker.C:
 				if err := remoteWS.Ping(); err != nil {
+					cancel()
 					return
 				}
 			}
@@ -150,9 +151,10 @@ func BridgeWS(
 		}
 	}()
 
-	wg.Wait()
-	_ = remoteWS.Close()
+	<-ctx.Done()
 	_ = client.Close()
+	_ = remoteWS.Close()
+	wg.Wait()
 
 	elapsed := time.Since(startTime).Seconds()
 	log.Printf("[%s] Session closed: ^%d bytes, v%d bytes in %.1fs",

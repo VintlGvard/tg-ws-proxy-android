@@ -29,21 +29,21 @@ const (
 )
 
 var (
-	ErrWebSocketClosed  = errors.New("websocket connection closed")
-	ErrMessageTooLarge  = errors.New("websocket message exceeded max limit")
-	ErrInvalidOpcode    = errors.New("unsupported websocket opcode")
-	ErrHandshakeFailed  = errors.New("websocket handshake failed")
+	ErrWebSocketClosed = errors.New("websocket connection closed")
+	ErrMessageTooLarge = errors.New("websocket message exceeded max limit")
+	ErrInvalidOpcode   = errors.New("unsupported websocket opcode")
+	ErrHandshakeFailed = errors.New("websocket handshake failed")
 )
 
 // RawWebSocket provides RFC 6455 framing over TLS/TCP connection.
 type RawWebSocket struct {
-	conn      net.Conn
-	reader    *bufio.Reader
-	writer    *bufio.Writer
-	muWrite   sync.Mutex
-	closed    bool
-	muClose   sync.Mutex
-	fragBuf   []byte
+	conn    net.Conn
+	reader  *bufio.Reader
+	writer  *bufio.Writer
+	muWrite sync.Mutex
+	closed  bool
+	muClose sync.Mutex
+	fragBuf []byte
 }
 
 // DialOptions holds connection parameters.
@@ -68,8 +68,8 @@ var (
 	dnsCache   = make(map[string]dnsCacheEntry)
 	dnsServers = []string{
 		"77.88.8.8:53", // Yandex DNS (uncensored, ultra-fast in RU/CIS)
-		"1.1.1.1:53",    // Cloudflare DNS
-		"8.8.8.8:53",    // Google DNS
+		"1.1.1.1:53",   // Cloudflare DNS
+		"8.8.8.8:53",   // Google DNS
 	}
 )
 
@@ -188,9 +188,8 @@ func Connect(opts DialOptions) (*RawWebSocket, error) {
 
 	if opts.Secure {
 		tlsConfig := &tls.Config{
-			ServerName:         sni,
-			MinVersion:         tls.VersionTLS12,
-			InsecureSkipVerify: true,
+			ServerName: sni,
+			MinVersion: tls.VersionTLS12,
 		}
 		tlsConn := tls.Client(rawConn, tlsConfig)
 		ctx, cancel := context.WithTimeout(context.Background(), opts.Timeout)
@@ -335,7 +334,8 @@ func (ws *RawWebSocket) Recv() ([]byte, error) {
 			ws.closed = true
 			ws.muClose.Unlock()
 
-			// Echo close frame
+			_ = ws.conn.SetWriteDeadline(time.Now().Add(time.Second))
+			defer ws.conn.Close()
 			ws.muWrite.Lock()
 			reply := buildFrame(OpClose, payload, true)
 			_, _ = ws.writer.Write(reply)
@@ -378,22 +378,10 @@ func (ws *RawWebSocket) Recv() ([]byte, error) {
 	}
 }
 
-// Close gracefully closes the WebSocket connection.
 func (ws *RawWebSocket) Close() error {
 	ws.muClose.Lock()
-	if ws.closed {
-		ws.muClose.Unlock()
-		return nil
-	}
 	ws.closed = true
 	ws.muClose.Unlock()
-
-	ws.muWrite.Lock()
-	closeFrame := buildFrame(OpClose, nil, true)
-	_, _ = ws.writer.Write(closeFrame)
-	_ = ws.writer.Flush()
-	ws.muWrite.Unlock()
-
 	return ws.conn.Close()
 }
 
@@ -466,20 +454,20 @@ func (ws *RawWebSocket) readFrame() (opcode byte, payload []byte, fin bool, err 
 	}
 
 	hasMask := (b1 & 0x80) != 0
-	payloadLen := int64(b1 & 0x7F)
+	payloadLen := uint64(b1 & 0x7F)
 
 	if payloadLen == 126 {
 		var l16 [2]byte
 		if _, err := io.ReadFull(ws.reader, l16[:]); err != nil {
 			return 0, nil, false, err
 		}
-		payloadLen = int64(binary.BigEndian.Uint16(l16[:]))
+		payloadLen = uint64(binary.BigEndian.Uint16(l16[:]))
 	} else if payloadLen == 127 {
 		var l64 [8]byte
 		if _, err := io.ReadFull(ws.reader, l64[:]); err != nil {
 			return 0, nil, false, err
 		}
-		payloadLen = int64(binary.BigEndian.Uint64(l64[:]))
+		payloadLen = binary.BigEndian.Uint64(l64[:])
 	}
 
 	if payloadLen > MaxMessageLen {

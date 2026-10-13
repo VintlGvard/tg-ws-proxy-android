@@ -1,10 +1,18 @@
 package ws
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/rand"
+	"encoding/binary"
+	"errors"
 	"fmt"
+	"io"
+	"log"
 	"net"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -94,6 +102,97 @@ func TestWebSocketHandshakeAndFrames(t *testing.T) {
 
 	if !bytes.Equal(reply, testData) {
 		t.Fatalf("echo mismatch: got %s, want %s", string(reply), string(testData))
+	}
+}
+
+func TestReadFrameRejectsOversizedLengths(t *testing.T) {
+	for _, length := range []uint64{MaxMessageLen + 1, 1 << 63, ^uint64(0)} {
+		t.Run(strconv.FormatUint(length, 10), func(t *testing.T) {
+			frame := make([]byte, 10)
+			frame[0], frame[1] = 0x82, 127
+			binary.BigEndian.PutUint64(frame[2:], length)
+			client := &RawWebSocket{reader: bufio.NewReader(bytes.NewReader(frame))}
+			if _, _, _, err := client.readFrame(); !errors.Is(err, ErrMessageTooLarge) {
+				t.Fatalf("got %v, want %v", err, ErrMessageTooLarge)
+			}
+		})
+	}
+}
+
+func TestConnectRejectsUntrustedTLS(t *testing.T) {
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Error("untrusted TLS reached HTTP handler")
+	}))
+	server.Config.ErrorLog = log.New(io.Discard, "", 0)
+	server.StartTLS()
+	defer server.Close()
+	host, portString, err := net.SplitHostPort(server.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	port, err := strconv.Atoi(portString)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, err := Connect(DialOptions{Host: host, Port: port, Domain: "example.com", Secure: true, Timeout: time.Second})
+	if err == nil {
+		client.Close()
+		t.Fatal("untrusted certificate accepted")
+	}
+}
+
+func TestCloseInterruptsBlockedSend(t *testing.T) {
+	conn, peer := net.Pipe()
+	defer peer.Close()
+	client := &RawWebSocket{conn: conn, writer: bufio.NewWriter(conn)}
+	defer client.Close()
+	sent := make(chan error, 1)
+	go func() { sent <- client.Send([]byte("test")) }()
+	var header [1]byte
+	if _, err := io.ReadFull(peer, header[:]); err != nil {
+		t.Fatal(err)
+	}
+	closed := make(chan struct{})
+	go func() { client.Close(); close(closed) }()
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Fatal("Close blocked on writer")
+	}
+	select {
+	case err := <-sent:
+		if err == nil {
+			t.Fatal("blocked send succeeded")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("send remained blocked")
+	}
+}
+
+func TestReceivedCloseClosesSocket(t *testing.T) {
+	conn, peer := net.Pipe()
+	defer peer.Close()
+	client := &RawWebSocket{conn: conn, reader: bufio.NewReader(conn), writer: bufio.NewWriter(conn)}
+	defer client.Close()
+	peerResult := make(chan error, 1)
+	go func() {
+		if _, err := peer.Write([]byte{0x88, 0}); err != nil {
+			peerResult <- err
+			return
+		}
+		_, err := io.Copy(io.Discard, peer)
+		peerResult <- err
+	}()
+	if _, err := client.Recv(); !errors.Is(err, ErrWebSocketClosed) {
+		t.Fatalf("got %v, want %v", err, ErrWebSocketClosed)
+	}
+	select {
+	case err := <-peerResult:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("socket remained open")
 	}
 }
 
