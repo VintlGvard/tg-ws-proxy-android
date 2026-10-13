@@ -1,0 +1,31 @@
+# Built-in Gradle / Android
+.gradle/
+build/
+app/build/
+android/.gradle/
+android/.kotlin/
+android/app/build/
+android/local.properties
+*.apk
+*.aab
+
+# IDE & Editor files
+.idea/
+*.iml
+.vscode/
+*.swp
+*.bak
+
+# Go build binaries (precompiled libs for app are kept in jniLibs/)
+core/*.exe
+core/*.so
+core/bin/
+
+# Temporary reference clone
+flowseal-tg-ws-proxy/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
