@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -138,6 +140,41 @@ func TestConnectRejectsUntrustedTLS(t *testing.T) {
 	if err == nil {
 		client.Close()
 		t.Fatal("untrusted certificate accepted")
+	}
+}
+
+func TestTLSRejectsMissingServerName(t *testing.T) {
+	conn, peer := net.Pipe()
+	defer conn.Close()
+	defer peer.Close()
+	client := tls.Client(conn, &tls.Config{MinVersion: tls.VersionTLS12})
+	if err := client.Handshake(); err == nil || !strings.Contains(err.Error(), "either ServerName or InsecureSkipVerify must be specified") {
+		t.Fatalf("unexpected handshake result: %v", err)
+	}
+}
+
+func TestCloseSendsCloseFrame(t *testing.T) {
+	conn, peer := net.Pipe()
+	defer peer.Close()
+	client := &RawWebSocket{conn: conn, writer: bufio.NewWriter(conn)}
+	defer client.Close()
+	result := make(chan error, 1)
+	go func() { result <- client.Close() }()
+	if err := peer.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	var frame [6]byte
+	if _, err := io.ReadFull(peer, frame[:]); err != nil {
+		t.Fatal(err)
+	}
+	if frame[0] != 0x88 || frame[1] != 0x80 {
+		t.Fatalf("expected masked Close frame, got %x", frame)
+	}
+	if _, err := peer.Read(frame[:]); err != io.EOF {
+		t.Fatalf("socket remained open: %v", err)
+	}
+	if err := <-result; err != nil {
+		t.Fatal(err)
 	}
 }
 

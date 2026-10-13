@@ -7,12 +7,10 @@ import android.util.Log
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
-import java.util.concurrent.atomic.AtomicBoolean
 
 class NativeProxyRunner(private val context: Context) {
 
     @Volatile private var process: Process? = null
-    private val isRunning = AtomicBoolean(false)
     private val mainHandler = Handler(Looper.getMainLooper())
     private var logListener: ((String) -> Unit)? = null
     private var exitListener: (() -> Unit)? = null
@@ -37,7 +35,7 @@ class NativeProxyRunner(private val context: Context) {
         cfWorker: String = "",
         disableFakeTls: Boolean = false
     ): Boolean {
-        if (isRunning.get()) {
+        if (isActive()) {
             Log.w(TAG, "Proxy is already running")
             return true
         }
@@ -81,7 +79,6 @@ class NativeProxyRunner(private val context: Context) {
             pb.redirectErrorStream(true)
             val startedProcess = pb.start()
             process = startedProcess
-            isRunning.set(true)
 
             Thread {
                 try {
@@ -105,7 +102,6 @@ class NativeProxyRunner(private val context: Context) {
                 mainHandler.post {
                     if (process === startedProcess) {
                         process = null
-                        isRunning.set(false)
                         Log.w(TAG, "Native proxy exited with code $exitCode")
                         exitListener?.invoke()
                     }
@@ -122,7 +118,6 @@ class NativeProxyRunner(private val context: Context) {
     }
 
     fun stop() {
-        isRunning.set(false)
         val stoppedProcess = process ?: return
         process = null
 
@@ -137,5 +132,13 @@ class NativeProxyRunner(private val context: Context) {
         }
     }
 
-    fun isActive(): Boolean = isRunning.get()
+    fun isActive(): Boolean {
+        val currentProcess = process ?: return false
+        return try {
+            currentProcess.exitValue()
+            false
+        } catch (_: IllegalThreadStateException) {
+            true
+        }
+    }
 }

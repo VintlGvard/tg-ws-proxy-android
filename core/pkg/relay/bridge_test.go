@@ -97,11 +97,13 @@ func TestBridgeClosesBlockedConnections(t *testing.T) {
 			case <-time.After(time.Second):
 				t.Fatal("bridge remained blocked")
 			}
-			if _, err := local.Write([]byte{0}); err == nil {
-				t.Fatal("client connection remained open")
+			if trigger != "client" {
+				if _, err := local.Write([]byte{0}); err == nil {
+					t.Fatal("client connection remained open")
+				}
 			}
 			if trigger != "upstream" {
-				if _, err := peer.Read(frame[:]); err != io.EOF {
+				if _, err := io.Copy(io.Discard, peer); err != nil {
 					t.Fatalf("upstream socket not closed: %v", err)
 				}
 			}

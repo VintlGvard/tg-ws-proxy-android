@@ -89,6 +89,7 @@ class TgWsProxyService : Service() {
             }
             ACTION_START, null -> {
                 if (runner.isActive()) return START_STICKY
+                stopProxy()
 
                 val port = intent?.getIntExtra(EXTRA_PORT, 1443) ?: SettingsManager.getPort(this)
                 val secret = if (intent == null) SettingsManager.getSecret(this)

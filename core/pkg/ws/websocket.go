@@ -380,8 +380,16 @@ func (ws *RawWebSocket) Recv() ([]byte, error) {
 
 func (ws *RawWebSocket) Close() error {
 	ws.muClose.Lock()
+	alreadyClosed := ws.closed
 	ws.closed = true
 	ws.muClose.Unlock()
+	if !alreadyClosed {
+		_ = ws.conn.SetWriteDeadline(time.Now().Add(250 * time.Millisecond))
+		ws.muWrite.Lock()
+		_, _ = ws.writer.Write(buildFrame(OpClose, nil, true))
+		_ = ws.writer.Flush()
+		ws.muWrite.Unlock()
+	}
 	return ws.conn.Close()
 }
 
