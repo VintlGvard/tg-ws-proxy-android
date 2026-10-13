@@ -1,7 +1,8 @@
 # TG WS Proxy for Android
 
 [![Platform](https://img.shields.io/badge/Platform-Android%207.0%2B%20(API%2024%2B)-brightgreen.svg)](https://android.com)
-[![Language](https://img.shields.io/badge/Kotlin-1.9%20%7C%20Go-1.22%2B-blue.svg)](https://kotlinlang.org)
+[![Kotlin](https://img.shields.io/badge/Kotlin-1.9-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
+[![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go&logoColor=white)](https://golang.org)
 [![Architecture](https://img.shields.io/badge/Arch-arm64--v8a%20%7C%20armeabi--v7a%20%7C%20x86__64-orange.svg)](#)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
@@ -14,9 +15,9 @@
 ## Скриншоты
 
 <p align="center">
-  <img src="docs/screenshots/screen_main.png" width="45%" alt="Главный экран">
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="docs/screenshots/screen_settings.png" width="45%" alt="Умные настройки">
+  <img src="docs/screenshots/screen_main.png" width="320" alt="Главный экран">
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/screenshots/screen_settings.png" width="320" alt="Умные настройки">
 </p>
 
 ---
