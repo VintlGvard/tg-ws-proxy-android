@@ -11,8 +11,8 @@ android {
         applicationId = "org.flowseal.tgwsproxy"
         minSdk = 24
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.1.0"
+        versionCode = 4
+        versionName = "1.1.1"
 
         ndk {
             abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86_64"))
