@@ -1,0 +1,58 @@
+name: 🐛 Отчёт об ошибке (Bug Report)
+description: Сообщить о проблеме или неполадке в работе приложения
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо, что помогаете улучшить проект! Пожалуйста, заполните форму ниже.
+  - type: textarea
+    id: description
+    attributes:
+      label: Описание проблемы
+      description: Чётко и понятно опишите, что пошло не так.
+      placeholder: Например, прокси запускается, но Telegram пишет "Соединение..." и не подключается.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги для воспроизведения
+      description: Что нужно сделать, чтобы повторить ошибку?
+      placeholder: |
+        1. Запустил приложение
+        2. Выбрал пресет SNI: Google
+        3. Нажал «Запустить прокси»
+        4. Нажал «Подключить в Telegram»
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Модель устройства и версия Android
+      placeholder: Например, Xiaomi Redmi Note 12, Android 14 (HyperOS)
+    validations:
+      required: true
+  - type: input
+    id: telegram_version
+    attributes:
+      label: Клиент Telegram и версия
+      placeholder: Например, Telegram Official 10.14.2 / Telegram X / Nekogram
+    validations:
+      required: true
+  - type: input
+    id: network
+    attributes:
+      label: Тип сети и оператор
+      placeholder: Например, Мобильный интернет МТС / Домашний Wi-Fi Ростелеком
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Журнал работы (Логи)
+      description: Скопируйте логи из карточки «Журнал работы» в приложении.
+      render: shell
+    validations:
+      required: false

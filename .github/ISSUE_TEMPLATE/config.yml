@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Telegram канал / чат
+    url: https://t.me/
+    about: Задать быстрый вопрос сообществу или обсудить работу прокси
+  - name: 📖 Документация и FAQ
+    url: https://github.com/keelbismark/tg-ws-proxy-android#readme
+    about: Инструкция по быстрому старту и принципу работы

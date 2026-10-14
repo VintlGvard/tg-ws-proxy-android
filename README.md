@@ -1,8 +1,9 @@
 # TG WS Proxy for Android
 
 [![Release](https://img.shields.io/github/v/release/keelbismark/tg-ws-proxy-android?color=blue)](https://github.com/keelbismark/tg-ws-proxy-android/releases/latest)
+[![CI](https://github.com/keelbismark/tg-ws-proxy-android/actions/workflows/ci.yml/badge.svg)](https://github.com/keelbismark/tg-ws-proxy-android/actions/workflows/ci.yml)
 [![Platform](https://img.shields.io/badge/Platform-Android%207.0%2B%20(API%2024%2B)-brightgreen.svg)](https://android.com)
-[![Kotlin](https://img.shields.io/badge/Kotlin-1.9-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go&logoColor=white)](https://golang.org)
 [![Architecture](https://img.shields.io/badge/Arch-arm64--v8a%20%7C%20armeabi--v7a%20%7C%20x86__64-orange.svg)](#)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
@@ -113,6 +114,13 @@ go build -buildmode=c-shared -ldflags="-s -w" -o ../android/app/src/main/jniLibs
 $env:CGO_ENABLED="1"; $env:GOOS="android"; $env:GOARCH="arm"; $env:GOARM="7"; $env:CC="<NDK_PATH>/armv7a-linux-androideabi35-clang"
 go build -buildmode=c-shared -ldflags="-s -w" -o ../android/app/src/main/jniLibs/armeabi-v7a/libtgproxy.so ./cmd/proxy
 ```
+
+---
+
+## Сообщество и безопасность
+
+* [Руководство по разработке и сборке](CONTRIBUTING.md)
+* [Политика безопасности и сообщение об уязвимостях](SECURITY.md)
 
 ---
 
