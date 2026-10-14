@@ -48,6 +48,14 @@ android {
             useLegacyPackaging = true
         }
     }
+
+    applicationVariants.all {
+        outputs.all {
+            val output = this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            val variantSuffix = if (buildType.name == "release") "" else "-${buildType.name}"
+            output?.outputFileName = "tg-ws-proxy-v${versionName}${variantSuffix}.apk"
+        }
+    }
 }
 
 dependencies {

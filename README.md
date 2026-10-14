@@ -17,7 +17,7 @@
 
 Готовый файл APK доступен на странице [Releases](https://github.com/keelbismark/tg-ws-proxy-android/releases/latest).
 
-1. Скачайте **`app-release.apk`** и установите на телефон (поддерживается Android 7.0+).
+1. Скачайте актуальный **`tg-ws-proxy-v*.apk`** и установите на телефон (поддерживается Android 7.0+).
 2. Запустите приложение и нажмите **«Запустить прокси»**.
 3. Нажмите **«Подключить в Telegram»** — откроется Telegram с предложением активировать прокси `127.0.0.1:1443`.
 4. *(Опционально)* Вынесите переключатель в шторку быстрых настроек Android (Quick Settings Tile) для включения в один тап.
@@ -96,7 +96,7 @@ cd android
 ```
 
 Собранный файл:
-`android/app/build/outputs/apk/release/app-release.apk`
+`android/app/build/outputs/apk/release/tg-ws-proxy-v1.1.0.apk`
 
 ### Нативное ядро (Go)
 
