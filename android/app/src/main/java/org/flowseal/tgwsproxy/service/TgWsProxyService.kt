@@ -19,6 +19,7 @@ import org.flowseal.tgwsproxy.TgWsApplication
 import org.flowseal.tgwsproxy.core.NativeProxyRunner
 import org.flowseal.tgwsproxy.receiver.ProxyActionReceiver
 import org.flowseal.tgwsproxy.ui.MainActivity
+import org.flowseal.tgwsproxy.util.SettingsManager
 
 data class ProxyStats(
     val active: Int = 0,
@@ -63,6 +64,10 @@ class TgWsProxyService : Service() {
     override fun onCreate() {
         super.onCreate()
         runner = NativeProxyRunner(this)
+        runner.setExitListener {
+            stopProxy()
+            stopSelf()
+        }
         runner.setLogListener { line ->
             _logFlow.tryEmit(line)
             val match = statsRegex.find(line)
@@ -83,9 +88,14 @@ class TgWsProxyService : Service() {
                 stopSelf()
             }
             ACTION_START, null -> {
-                val port = intent?.getIntExtra(EXTRA_PORT, 1443) ?: 1443
-                val secret = intent?.getStringExtra(EXTRA_SECRET) ?: ""
-                val domain = intent?.getStringExtra(EXTRA_DOMAIN) ?: "google.com"
+                if (runner.isActive()) return START_STICKY
+                stopProxy()
+
+                val port = intent?.getIntExtra(EXTRA_PORT, 1443) ?: SettingsManager.getPort(this)
+                val secret = if (intent == null) SettingsManager.getSecret(this)
+                    else intent.getStringExtra(EXTRA_SECRET) ?: ""
+                val domain = if (intent == null) SettingsManager.getDomain(this)
+                    else intent.getStringExtra(EXTRA_DOMAIN) ?: "google.com"
                 val cfWorker = intent?.getStringExtra(EXTRA_CF_WORKER) ?: ""
 
                 currentPort = port
@@ -99,13 +109,21 @@ class TgWsProxyService : Service() {
     }
 
     private fun startProxy(port: Int, secret: String, domain: String, cfWorker: String) {
-        acquireLocks()
+        try {
+            acquireLocks()
 
-        val notification = buildNotification(port)
-        startForeground(NOTIFICATION_ID, notification)
+            val notification = buildNotification(port)
+            startForeground(NOTIFICATION_ID, notification)
 
-        val success = runner.start(port, secret, domain, cfWorker)
-        _isRunning.value = success
+            if (runner.start(port, secret, domain, cfWorker)) {
+                _isRunning.value = true
+                return
+            }
+        } catch (e: Exception) {
+            _logFlow.tryEmit("Ошибка запуска: ${e.message}")
+        }
+        stopProxy()
+        stopSelf()
     }
 
     private fun stopProxy() {
@@ -161,7 +179,8 @@ class TgWsProxyService : Service() {
         wakeLock = powerManager.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
             "TgWsProxy::ServiceWakeLock"
-        ).apply {
+        )
+        wakeLock?.apply {
             setReferenceCounted(false)
             acquire(12 * 60 * 60 * 1000L) // 12 hours max
         }
@@ -170,7 +189,8 @@ class TgWsProxyService : Service() {
         wifiLock = wifiManager.createWifiLock(
             WifiManager.WIFI_MODE_FULL_HIGH_PERF,
             "TgWsProxy::ServiceWifiLock"
-        ).apply {
+        )
+        wifiLock?.apply {
             setReferenceCounted(false)
             acquire()
         }
@@ -179,6 +199,8 @@ class TgWsProxyService : Service() {
     private fun releaseLocks() {
         try {
             if (wakeLock?.isHeld == true) wakeLock?.release()
+        } catch (_: Exception) {}
+        try {
             if (wifiLock?.isHeld == true) wifiLock?.release()
         } catch (_: Exception) {}
     }
