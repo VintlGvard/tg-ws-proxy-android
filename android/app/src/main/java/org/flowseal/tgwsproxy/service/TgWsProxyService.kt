@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import org.flowseal.tgwsproxy.R
 import org.flowseal.tgwsproxy.TgWsApplication
 import org.flowseal.tgwsproxy.core.NativeProxyRunner
@@ -115,8 +116,13 @@ class TgWsProxyService : Service() {
             val notification = buildNotification(port)
             startForeground(NOTIFICATION_ID, notification)
 
-            if (runner.start(port, secret, domain, cfWorker)) {
+            val dynamicDomains = SettingsManager.getDynamicDomains(this).joinToString(",")
+            val fallbackEnabled = SettingsManager.isCloudflareFallback(this)
+            val effectiveDomains = if (fallbackEnabled) dynamicDomains else ""
+
+            if (runner.start(port, secret, domain, cfWorker, cfDomains = effectiveDomains)) {
                 _isRunning.value = true
+                checkAndUpdateDomainsInBackground()
                 return
             }
         } catch (e: Exception) {
@@ -124,6 +130,19 @@ class TgWsProxyService : Service() {
         }
         stopProxy()
         stopSelf()
+    }
+
+    private fun checkAndUpdateDomainsInBackground() {
+        val lastUpdate = SettingsManager.getLastDomainUpdate(this)
+        val now = System.currentTimeMillis()
+        if (now - lastUpdate > 24 * 60 * 60 * 1000L) {
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                val res = SettingsManager.fetchAndRefreshDomains(this@TgWsProxyService)
+                res.onSuccess { count ->
+                    _logFlow.tryEmit("Зеркала Cloudflare обновлены: $count активных доменов")
+                }
+            }
+        }
     }
 
     private fun stopProxy() {

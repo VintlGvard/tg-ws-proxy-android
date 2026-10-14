@@ -12,11 +12,39 @@ object SettingsManager {
     private const val KEY_DOMAIN = "pref_domain"
     private const val KEY_SECRET = "pref_secret"
     private const val KEY_CF_FALLBACK = "pref_cf_fallback"
+    private const val KEY_AUTO_START = "pref_auto_start"
+    private const val KEY_DYNAMIC_DOMAINS = "pref_dynamic_domains"
+    private const val KEY_LAST_DOMAIN_UPDATE = "pref_last_domain_update"
 
     const val DEFAULT_PORT = 1443
     const val DEFAULT_DOMAIN = "google.com"
     const val CANONICAL_KEY_HEX = "d41d8cd98f00b204e9800998ecf8427e"
     const val DEFAULT_SECRET = "eed41d8cd98f00b204e9800998ecf8427e676f6f676c652e636f6d"
+
+    const val CFPROXY_DOMAINS_URL = "https://raw.githubusercontent.com/Flowseal/tg-ws-proxy/main/.github/cfproxy-domains.txt"
+
+    val DEFAULT_CF_DOMAINS = listOf(
+        "noskomnadzor.co.uk",
+        "cakeisalie.co.uk",
+        "fixtelega.co.uk",
+        "pclead.co.uk",
+        "pomogite.co.uk",
+        "havegreatday.co.uk",
+        "notelega.co.uk",
+        "ebally.co.uk",
+        "nebally.co.uk",
+        "sadnews.co.uk",
+        "stopblocking.co.uk",
+        "nothingthere.co.uk",
+        "onedaychamp.co.uk",
+        "kartoshka.co.uk",
+        "sorokodin.co.uk",
+        "sorokdva.co.uk",
+        "pyatdesyatodin.co.uk",
+        "pyatdesyatdva.co.uk",
+        "lovetrue.co.uk",
+        "offshor.co.uk"
+    )
 
     val PRESET_DOMAINS = listOf(
         "google.com" to "Google",
@@ -69,11 +97,103 @@ object SettingsManager {
         getPrefs(context).edit().putBoolean(KEY_CF_FALLBACK, enabled).apply()
     }
 
+    fun isAutoStartEnabled(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_AUTO_START, false)
+    }
+
+    fun setAutoStartEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_AUTO_START, enabled).apply()
+    }
+
+    fun getDynamicDomains(context: Context): List<String> {
+        val raw = getPrefs(context).getString(KEY_DYNAMIC_DOMAINS, null)
+        if (raw.isNullOrBlank()) {
+            return DEFAULT_CF_DOMAINS
+        }
+        val list = raw.split(",").map { it.trim().lowercase() }.filter { it.isNotBlank() }
+        return if (list.size >= 3) list else DEFAULT_CF_DOMAINS
+    }
+
+    fun setDynamicDomains(context: Context, domains: List<String>) {
+        val joined = domains.joinToString(",")
+        getPrefs(context).edit()
+            .putString(KEY_DYNAMIC_DOMAINS, joined)
+            .putLong(KEY_LAST_DOMAIN_UPDATE, System.currentTimeMillis())
+            .apply()
+    }
+
+    fun getLastDomainUpdate(context: Context): Long {
+        return getPrefs(context).getLong(KEY_LAST_DOMAIN_UPDATE, 0L)
+    }
+
+    /**
+     * Decodes Caesar-shifted CF proxy domain from Flowseal format:
+     * e.g. "virkgj.com" -> "pclead.co.uk"
+     */
+    fun decodeCfDomain(s: String): String {
+        val trimmed = s.trim().lowercase()
+        if (!trimmed.endsWith(".com")) return trimmed
+        val prefix = trimmed.substring(0, trimmed.length - 4)
+        val n = prefix.count { it in 'a'..'z' }
+        val decoded = buildString {
+            for (c in prefix) {
+                if (c in 'a'..'z') {
+                    val shifted = (c.code - 'a'.code - n) % 26
+                    val normalized = if (shifted < 0) shifted + 26 else shifted
+                    append(('a'.code + normalized).toChar())
+                } else {
+                    append(c)
+                }
+            }
+        }
+        return "$decoded.co.uk"
+    }
+
+    /**
+     * Downloads and updates latest Cloudflare gateway mirrors from GitHub.
+     */
+    suspend fun fetchAndRefreshDomains(context: Context): Result<Int> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        try {
+            val url = java.net.URL("$CFPROXY_DOMAINS_URL?cache_bust=${System.currentTimeMillis()}")
+            val conn = url.openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            conn.requestMethod = "GET"
+            conn.setRequestProperty("User-Agent", "TG-WS-Proxy-Android")
+
+            if (conn.responseCode != 200) {
+                return@withContext Result.failure(Exception("HTTP error ${conn.responseCode}"))
+            }
+
+            val text = conn.inputStream.bufferedReader().use { it.readText() }
+            val rawLines = text.lines().map { it.trim() }.filter { it.isNotBlank() && !it.startsWith("#") }
+            val decodedDomains = rawLines.map { decodeCfDomain(it) }.filter { isValidDomain(it) }.distinct()
+
+            if (decodedDomains.size >= 3) {
+                setDynamicDomains(context, decodedDomains)
+                Result.success(decodedDomains.size)
+            } else {
+                Result.failure(Exception("Получено недостаточно валидных доменов (${decodedDomains.size})"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private fun isValidDomain(domain: String): Boolean {
+        if (domain.length < 4 || domain.length > 253) return false
+        val parts = domain.split(".")
+        if (parts.size < 2) return false
+        return parts.all { it.isNotBlank() && it.all { ch -> ch.isLetterOrDigit() || ch == '-' } }
+    }
+
     fun resetToDefaults(context: Context) {
         setPort(context, DEFAULT_PORT)
         setDomain(context, DEFAULT_DOMAIN)
         setSecret(context, DEFAULT_SECRET)
         setCloudflareFallback(context, true)
+        setAutoStartEnabled(context, false)
+        setDynamicDomains(context, DEFAULT_CF_DOMAINS)
     }
 
     /**

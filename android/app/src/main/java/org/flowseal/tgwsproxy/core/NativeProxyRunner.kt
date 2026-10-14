@@ -33,6 +33,7 @@ class NativeProxyRunner(private val context: Context) {
         secret: String = "",
         domain: String = "google.com",
         cfWorker: String = "",
+        cfDomains: String = "",
         disableFakeTls: Boolean = false
     ): Boolean {
         if (isActive()) {
@@ -65,6 +66,10 @@ class NativeProxyRunner(private val context: Context) {
             if (cfWorker.isNotBlank()) {
                 add("-cf-worker")
                 add(cfWorker)
+            }
+            if (cfDomains.isNotBlank()) {
+                add("-cf-domains")
+                add(cfDomains)
             }
             if (disableFakeTls) {
                 add("-no-faketls")

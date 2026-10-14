@@ -1,6 +1,9 @@
 package proto
 
-import "fmt"
+import (
+	"fmt"
+	"sync"
+)
 
 const (
 	HandshakeLen = 64
@@ -53,6 +56,8 @@ var (
 		3: "149.154.175.117",
 	}
 
+	cfDomainsMu sync.RWMutex
+
 	CFDefaultDomains = []string{
 		"noskomnadzor.co.uk",
 		"cakeisalie.co.uk",
@@ -76,6 +81,23 @@ var (
 		"offshor.co.uk",
 	}
 )
+
+// SetCFDomains dynamically updates the list of Cloudflare base gateway domains.
+func SetCFDomains(domains []string) {
+	cfDomainsMu.Lock()
+	defer cfDomainsMu.Unlock()
+	CFDefaultDomains = make([]string, len(domains))
+	copy(CFDefaultDomains, domains)
+}
+
+// GetCFDomains returns a snapshot of the current Cloudflare gateway base domains.
+func GetCFDomains() []string {
+	cfDomainsMu.RLock()
+	defer cfDomainsMu.RUnlock()
+	list := make([]string, len(CFDefaultDomains))
+	copy(list, CFDefaultDomains)
+	return list
+}
 
 // WSDomains returns the official Telegram Web gateway domains for a given DC.
 func WSDomains(dc int, isMedia bool) []string {
@@ -103,7 +125,7 @@ func AllUpstreamDomains(dc int, isMedia bool, useCF bool) []string {
 		targetDC = 2
 	}
 
-	for _, base := range CFDefaultDomains {
+	for _, base := range GetCFDomains() {
 		domains = append(domains, fmt.Sprintf("kws%d.%s", targetDC, base))
 	}
 	return domains

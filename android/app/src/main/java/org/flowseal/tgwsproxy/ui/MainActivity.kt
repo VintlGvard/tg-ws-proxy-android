@@ -89,6 +89,60 @@ class MainActivity : AppCompatActivity() {
         binding.btnClearLogs.setOnClickListener {
             binding.tvLogs.text = "Журнал очищен.\n"
         }
+
+        binding.btnCheckPing.setOnClickListener {
+            runGatewayDiagnostics()
+        }
+    }
+
+    private fun runGatewayDiagnostics() {
+        binding.btnCheckPing.isEnabled = false
+        binding.tvDc2Ping.text = "..."
+        binding.tvDc4Ping.text = "..."
+        binding.tvDc1Ping.text = "..."
+        binding.tvCfPing.text = "..."
+
+        val inactiveColor = ContextCompat.getColor(this, R.color.text_secondary)
+        binding.tvDc2Ping.setTextColor(inactiveColor)
+        binding.tvDc4Ping.setTextColor(inactiveColor)
+        binding.tvDc1Ping.setTextColor(inactiveColor)
+        binding.tvCfPing.setTextColor(inactiveColor)
+
+        lifecycleScope.launch {
+            val results = org.flowseal.tgwsproxy.util.NetworkDiagnostics.runDiagnostics(this@MainActivity)
+            results.forEach { res ->
+                val text = if (res.rttMs != null) "${res.rttMs} мс" else "Ошибка"
+                val color = when {
+                    res.rttMs == null -> android.graphics.Color.parseColor("#E53935")
+                    res.rttMs < 100 -> android.graphics.Color.parseColor("#4CAF50")
+                    res.rttMs < 250 -> android.graphics.Color.parseColor("#8BC34A")
+                    else -> android.graphics.Color.parseColor("#FF9800")
+                }
+                when (res.dcId) {
+                    2 -> {
+                        binding.tvDc2Ping.text = text
+                        binding.tvDc2Ping.setTextColor(color)
+                        binding.dotDc2.setBackgroundColor(color)
+                    }
+                    4 -> {
+                        binding.tvDc4Ping.text = text
+                        binding.tvDc4Ping.setTextColor(color)
+                        binding.dotDc4.setBackgroundColor(color)
+                    }
+                    1 -> {
+                        binding.tvDc1Ping.text = text
+                        binding.tvDc1Ping.setTextColor(color)
+                        binding.dotDc1.setBackgroundColor(color)
+                    }
+                    0 -> {
+                        binding.tvCfPing.text = text
+                        binding.tvCfPing.setTextColor(color)
+                        binding.dotCf.setBackgroundColor(color)
+                    }
+                }
+            }
+            binding.btnCheckPing.isEnabled = true
+        }
     }
 
     private fun startProxyService() {
@@ -203,6 +257,37 @@ class MainActivity : AppCompatActivity() {
         sheetBinding.etSecret.setText(SettingsManager.getSecret(this))
         sheetBinding.etPort.setText(SettingsManager.getPort(this).toString())
         sheetBinding.switchCloudflare.isChecked = SettingsManager.isCloudflareFallback(this)
+        sheetBinding.switchAutoStart.isChecked = SettingsManager.isAutoStartEnabled(this)
+
+        fun updateDomainsLabel() {
+            val domains = SettingsManager.getDynamicDomains(this)
+            val lastUpdate = SettingsManager.getLastDomainUpdate(this)
+            val updateText = if (lastUpdate > 0) {
+                java.text.SimpleDateFormat("dd.MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(lastUpdate))
+            } else "по умолчанию"
+            sheetBinding.tvDynamicDomainsStatus.text = "Активно зеркал: ${domains.size} • $updateText"
+        }
+        updateDomainsLabel()
+
+        sheetBinding.btnRefreshDomains.setOnClickListener {
+            sheetBinding.btnRefreshDomains.isEnabled = false
+            sheetBinding.tvDynamicDomainsStatus.text = "Обновление с GitHub..."
+            lifecycleScope.launch {
+                val res = SettingsManager.fetchAndRefreshDomains(this@MainActivity)
+                sheetBinding.btnRefreshDomains.isEnabled = true
+                res.onSuccess { count ->
+                    updateDomainsLabel()
+                    Toast.makeText(this@MainActivity, "Зеркала обновлены ($count доменов)", Toast.LENGTH_SHORT).show()
+                    if (TgWsProxyService.isRunning.value) {
+                        stopProxyService()
+                        binding.root.postDelayed({ startProxyService() }, 300)
+                    }
+                }.onFailure { err ->
+                    sheetBinding.tvDynamicDomainsStatus.text = "Ошибка: ${err.message}"
+                    Toast.makeText(this@MainActivity, "Не удалось обновить зеркала", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
 
         when (currentDomain) {
             "google.com" -> sheetBinding.chipGoogle.isChecked = true
@@ -244,7 +329,9 @@ class MainActivity : AppCompatActivity() {
             sheetBinding.etSecret.setText(SettingsManager.getSecret(this))
             sheetBinding.etPort.setText(SettingsManager.DEFAULT_PORT.toString())
             sheetBinding.switchCloudflare.isChecked = true
+            sheetBinding.switchAutoStart.isChecked = false
             sheetBinding.chipGoogle.isChecked = true
+            updateDomainsLabel()
             Toast.makeText(this, "Настройки сброшены к рекомендованным", Toast.LENGTH_SHORT).show()
         }
 
@@ -260,6 +347,7 @@ class MainActivity : AppCompatActivity() {
             SettingsManager.setDomain(this, domain)
             SettingsManager.setSecret(this, secret)
             SettingsManager.setCloudflareFallback(this, sheetBinding.switchCloudflare.isChecked)
+            SettingsManager.setAutoStartEnabled(this, sheetBinding.switchAutoStart.isChecked)
 
             updateSettingsSummary()
 

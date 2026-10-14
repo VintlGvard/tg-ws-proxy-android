@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"tg-ws-proxy-core/pkg/config"
+	"tg-ws-proxy-core/pkg/proto"
 	"tg-ws-proxy-core/pkg/proxy"
 	"tg-ws-proxy-core/pkg/relay"
 )
@@ -23,10 +24,25 @@ func main() {
 	secretFlag := flag.String("secret", "eed41d8cd98f00b204e9800998ecf8427e676f6f676c652e636f6d", "Proxy secret (plain hex or ee<secret><domain>)")
 	domainFlag := flag.String("domain", "google.com", "Masking domain for Fake TLS")
 	cfWorkerFlag := flag.String("cf-worker", "", "Comma-separated Cloudflare worker domains for fallback")
+	cfDomainsFlag := flag.String("cf-domains", "", "Comma-separated Cloudflare proxy base domains")
 	noFakeTLSFlag := flag.Bool("no-faketls", false, "Disable Fake TLS (use raw MTProto obfuscation)")
 	statsIntervalFlag := flag.Int("stats-interval", 15, "Seconds between stats logs (0 to disable)")
 
 	flag.Parse()
+
+	if *cfDomainsFlag != "" {
+		var list []string
+		for _, d := range strings.Split(*cfDomainsFlag, ",") {
+			d = strings.TrimSpace(d)
+			if d != "" {
+				list = append(list, d)
+			}
+		}
+		if len(list) > 0 {
+			proto.SetCFDomains(list)
+			log.Printf("[Proxy] Dynamic CF gateway domains updated: %d domains", len(list))
+		}
+	}
 
 	cfg := config.DefaultConfig()
 	cfg.ListenAddr = *listenFlag
