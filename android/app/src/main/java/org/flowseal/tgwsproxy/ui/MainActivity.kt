@@ -9,12 +9,15 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.flowseal.tgwsproxy.R
@@ -26,6 +29,7 @@ import org.flowseal.tgwsproxy.util.SettingsManager
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private val logBuffer = StringBuilder()
 
     private val requestNotificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -41,9 +45,24 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         checkPermissions()
+        requestBatteryOptimizationExemption()
         setupListeners()
         observeState()
         updateSettingsSummary()
+    }
+
+    private fun requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+                try {
+                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                    startActivity(intent)
+                } catch (_: Exception) {}
+            }
+        }
     }
 
     private fun checkPermissions() {
@@ -80,13 +99,19 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnCopyLogs.setOnClickListener {
-            val text = binding.tvLogs.text.toString()
-            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            clipboard.setPrimaryClip(ClipData.newPlainText("TG Proxy Logs", text))
-            Toast.makeText(this, "Логи скопированы в буфер", Toast.LENGTH_SHORT).show()
+            try {
+                val fullText = if (logBuffer.isNotEmpty()) logBuffer.toString() else binding.tvLogs.text.toString()
+                val safeText = if (fullText.length > 40000) fullText.takeLast(40000) else fullText
+                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("TG Proxy Logs", safeText))
+                Toast.makeText(this, "Логи скопированы в буфер", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(this, "Ошибка копирования логов: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
         }
 
         binding.btnClearLogs.setOnClickListener {
+            logBuffer.clear()
             binding.tvLogs.text = "Журнал очищен.\n"
         }
 
@@ -211,10 +236,26 @@ class MainActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             TgWsProxyService.logFlow.collectLatest { logLine ->
-                binding.tvLogs.append("$logLine\n")
+                logBuffer.append(logLine).append("\n")
+                if (logBuffer.length > 40000) {
+                    logBuffer.delete(0, 10000)
+                }
+                binding.tvLogs.text = logBuffer.toString()
                 binding.scrollLogs.post {
                     binding.scrollLogs.fullScroll(android.view.View.FOCUS_DOWN)
                 }
+            }
+        }
+
+        lifecycleScope.launch {
+            TgWsProxyService.secretMismatchFlow.collectLatest {
+                Snackbar.make(
+                    binding.root,
+                    "⚠️ Ключ в Telegram устарел! Обновите прокси в Telegram.",
+                    Snackbar.LENGTH_INDEFINITE
+                ).setAction("Обновить") {
+                    connectToTelegram()
+                }.show()
             }
         }
     }
@@ -372,7 +413,9 @@ class MainActivity : AppCompatActivity() {
             }
 
             dialog.dismiss()
-            Toast.makeText(this, "Настройки сохранены", Toast.LENGTH_SHORT).show()
+            Snackbar.make(binding.root, "Настройки сохранены. Обновите ключ в Telegram!", Snackbar.LENGTH_LONG)
+                .setAction("Обновить") { connectToTelegram() }
+                .show()
         }
 
         dialog.show()

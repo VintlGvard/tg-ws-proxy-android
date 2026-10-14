@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.flowseal.tgwsproxy.R
 import org.flowseal.tgwsproxy.TgWsApplication
@@ -55,6 +56,9 @@ class TgWsProxyService : Service() {
         private val _statsFlow = MutableStateFlow(ProxyStats())
         val statsFlow = _statsFlow.asStateFlow()
 
+        private val _secretMismatchFlow = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 1)
+        val secretMismatchFlow = _secretMismatchFlow.asSharedFlow()
+
         private val statsRegex = Regex("""\[Stats\]\s*Active:\s*(\d+)\s*\|\s*Total:\s*(\d+).*?\|\s*Up:\s*([\d.]+)\s*MB\s*\|\s*Down:\s*([\d.]+)\s*MB""")
 
         var currentPort: Int = 1443
@@ -62,15 +66,59 @@ class TgWsProxyService : Service() {
         var currentDomain: String = ""
     }
 
+    private var isStoppingExplicitly = false
+    private var verifyFailCount = 0
+    private var lastVerifyFailTime = 0L
+    private var restartAttempts = 0
+    private var lastRestartTime = 0L
+    private val serviceScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main + kotlinx.coroutines.SupervisorJob())
+
     override fun onCreate() {
         super.onCreate()
         runner = NativeProxyRunner(this)
         runner.setExitListener {
+            if (_isRunning.value && !isStoppingExplicitly) {
+                val now = System.currentTimeMillis()
+                if (now - lastRestartTime > 60000) {
+                    restartAttempts = 0
+                }
+                lastRestartTime = now
+                restartAttempts++
+                if (restartAttempts <= 5) {
+                    _logFlow.tryEmit("⚠️ Ядро завершило работу (попытка $restartAttempts/5). Автоперезапуск...")
+                    serviceScope.launch {
+                        kotlinx.coroutines.delay(1000)
+                        if (_isRunning.value && !isStoppingExplicitly) {
+                            val dynamicDomains = SettingsManager.getDynamicDomains(this@TgWsProxyService).joinToString(",")
+                            val fallbackEnabled = SettingsManager.isCloudflareFallback(this@TgWsProxyService)
+                            val effectiveDomains = if (fallbackEnabled) dynamicDomains else ""
+                            runner.start(currentPort, currentSecret, currentDomain, cfDomains = effectiveDomains)
+                        }
+                    }
+                    return@setExitListener
+                } else {
+                    _logFlow.tryEmit("❌ Превышен лимит перезапусков ядра.")
+                }
+            }
             stopProxy()
             stopSelf()
         }
         runner.setLogListener { line ->
             _logFlow.tryEmit(line)
+
+            if (line.contains("Fake TLS verify failed")) {
+                val now = System.currentTimeMillis()
+                if (now - lastVerifyFailTime > 5000) {
+                    verifyFailCount = 0
+                }
+                lastVerifyFailTime = now
+                verifyFailCount++
+                if (verifyFailCount == 3) {
+                    _secretMismatchFlow.tryEmit(Unit)
+                    _logFlow.tryEmit("⚠️ [ВНИМАНИЕ] Ключ Fake TLS в Telegram не совпадает с ключом прокси! Нажмите «Подключить в Telegram» в приложении.")
+                }
+            }
+
             val match = statsRegex.find(line)
             if (match != null) {
                 val active = match.groupValues[1].toIntOrNull() ?: 0
@@ -111,6 +159,7 @@ class TgWsProxyService : Service() {
 
     private fun startProxy(port: Int, secret: String, domain: String, cfWorker: String) {
         try {
+            isStoppingExplicitly = false
             acquireLocks()
 
             val notification = buildNotification(port)
@@ -146,6 +195,7 @@ class TgWsProxyService : Service() {
     }
 
     private fun stopProxy() {
+        isStoppingExplicitly = true
         runner.stop()
         releaseLocks()
         _isRunning.value = false
@@ -226,6 +276,7 @@ class TgWsProxyService : Service() {
 
     override fun onDestroy() {
         stopProxy()
+        serviceScope.cancel()
         super.onDestroy()
     }
 
