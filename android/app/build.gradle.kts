@@ -11,18 +11,27 @@ android {
         applicationId = "org.flowseal.tgwsproxy"
         minSdk = 24
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.1.1"
+        versionCode = 5
+        versionName = "1.1.2"
 
         ndk {
             abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86_64"))
         }
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("release.keystore")
+            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "tgwsproxy2026"
+            keyAlias = System.getenv("KEY_ALIAS") ?: "tgwsproxy"
+            keyPassword = System.getenv("KEY_PASSWORD") ?: "tgwsproxy2026"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
