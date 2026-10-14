@@ -1,5 +1,6 @@
 # TG WS Proxy for Android
 
+[![Release](https://img.shields.io/github/v/release/keelbismark/tg-ws-proxy-android?color=blue)](https://github.com/keelbismark/tg-ws-proxy-android/releases/latest)
 [![Platform](https://img.shields.io/badge/Platform-Android%207.0%2B%20(API%2024%2B)-brightgreen.svg)](https://android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go&logoColor=white)](https://golang.org)
@@ -9,6 +10,17 @@
 Нативный Android-клиент и фоновый сервис для обхода замедления и блокировок Telegram (медиафайлы, голосовые, видеосообщения, каналы) без использования стороннего VPN.
 
 Основан на логике проекта [Flowseal/tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy). Сетевое ядро переписано на **Go** и скомпилировано в разделяемую библиотеку (`libtgproxy.so`), поверх которой работает Android-клиент на **Kotlin & Material 3**.
+
+---
+
+## 📥 Быстрый старт
+
+Готовый файл APK доступен на странице [Releases](https://github.com/keelbismark/tg-ws-proxy-android/releases/latest).
+
+1. Скачайте **`app-release.apk`** и установите на телефон (поддерживается Android 7.0+).
+2. Запустите приложение и нажмите **«Запустить прокси»**.
+3. Нажмите **«Подключить в Telegram»** — откроется Telegram с предложением активировать прокси `127.0.0.1:1443`.
+4. *(Опционально)* Вынесите переключатель в шторку быстрых настроек Android (Quick Settings Tile) для включения в один тап.
 
 ---
 
@@ -53,6 +65,10 @@ Telegram Data Centers (DC 1..5)
   * Пресеты SNI-маскировки: Google, Apple, Cloudflare, Microsoft, Яндекс.
   * Автоматическая генерация валидных Fake TLS ключей (`ee<32 hex><domain in hex>`).
   * Настройка локального порта и переключение Cloudflare Fallback.
+* **Безопасность и надёжность:**
+  * Валидация цепочки TLS-сертификатов при обращении к внешним шлюзам (защита от MITM).
+  * Строгий контроль размеров WebSocket-кадров для защиты от переполнения памяти (OOM).
+  * Корректный graceful close сессий с ограниченным таймаутом.
 * **Низкое потребление ресурсов:**
   * Оперативная память: ~10–14 МБ RAM.
   * Минимальная нагрузка на батарею благодаря горутинам Go.
@@ -61,6 +77,7 @@ Telegram Data Centers (DC 1..5)
   * Плитка в шторке быстрых настроек Android (Quick Settings Tile).
   * Встроенные Keep-Alive пинги (30 сек) для предотвращения разрыва сессий.
   * Локальный DNS-кэш и параллельный опрос независимых DNS-серверов.
+  * Автоматическое восстановление состояния и сохранённых настроек при рестарте сервиса ОС.
 
 ---
 
