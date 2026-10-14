@@ -255,11 +255,52 @@
                             app:iconTint="@color/primary" />
                     </LinearLayout>
 
-                    <!-- DC2 Row -->
+                    <!-- Local Proxy Row -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <View
+                            android:id="@+id/dotLocalProxy"
+                            android:layout_width="8dp"
+                            android:layout_height="8dp"
+                            android:background="@drawable/bg_power_circle" />
+
+                        <TextView
+                            android:id="@+id/tvLocalProxyTitle"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:layout_weight="1"
+                            android:text="Локальный мост (127.0.0.1:1443)"
+                            android:textColor="@color/text_primary"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvLocalProxyStatus"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Остановлен"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginBottom="8dp"
+                        android:background="@color/surface_card" />
+
+                    <!-- DC2 Row -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
                         android:gravity="center_vertical"
                         android:orientation="horizontal">
 
@@ -386,6 +427,17 @@
                             android:textSize="13sp"
                             android:textStyle="bold" />
                     </LinearLayout>
+
+                    <!-- Diagnostic Hint Text -->
+                    <TextView
+                        android:id="@+id/tvDiagnosticHint"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="ℹ️ Шлюзы на связи. Для работы Telegram запустите прокси кнопкой выше."
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"
+                        android:lineSpacingExtra="2dp" />
 
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>

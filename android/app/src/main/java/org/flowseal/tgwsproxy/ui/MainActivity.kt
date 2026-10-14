@@ -96,6 +96,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun runGatewayDiagnostics() {
+        updateUiRunningState(TgWsProxyService.isRunning.value)
         binding.btnCheckPing.isEnabled = false
         binding.tvDc2Ping.text = "..."
         binding.tvDc4Ping.text = "..."
@@ -227,13 +228,26 @@ class MainActivity : AppCompatActivity() {
             binding.btnToggleProxy.text = getString(R.string.btn_stop)
             binding.btnToggleProxy.setIconResource(R.drawable.ic_stop)
             binding.btnToggleProxy.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_inactive)
+
+            binding.dotLocalProxy.setBackgroundColor(android.graphics.Color.parseColor("#4CAF50"))
+            binding.tvLocalProxyStatus.text = "Активен"
+            binding.tvLocalProxyStatus.setTextColor(android.graphics.Color.parseColor("#4CAF50"))
+            binding.tvDiagnosticHint.text = "✅ Прокси активен на 127.0.0.1:$port. Трафик Telegram защищён и направлен через веб-шлюзы."
+            binding.tvDiagnosticHint.setTextColor(android.graphics.Color.parseColor("#8BC34A"))
         } else {
             binding.viewStatusDot.setBackgroundColor(ContextCompat.getColor(this, R.color.status_inactive))
             binding.tvStatusTitle.text = getString(R.string.status_stopped)
             binding.btnToggleProxy.text = getString(R.string.btn_start)
             binding.btnToggleProxy.setIconResource(R.drawable.ic_play)
             binding.btnToggleProxy.backgroundTintList = ContextCompat.getColorStateList(this, R.color.primary)
+
+            binding.dotLocalProxy.setBackgroundColor(ContextCompat.getColor(this, R.color.status_inactive))
+            binding.tvLocalProxyStatus.text = "Остановлен"
+            binding.tvLocalProxyStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
+            binding.tvDiagnosticHint.text = "ℹ️ Шлюзы на связи. Для работы Telegram запустите прокси кнопкой выше."
+            binding.tvDiagnosticHint.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
         }
+        binding.tvLocalProxyTitle.text = "Локальный мост (127.0.0.1:$port)"
     }
 
     private fun updateSettingsSummary() {
@@ -245,6 +259,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.tvSettingsSummaryDomain.text = "Маскировка (SNI): $currentDomain ($presetName)"
         binding.tvSettingsSummaryPort.text = "Порт: $port • Cloudflare Fallback: $cfStatus"
+        binding.tvLocalProxyTitle.text = "Локальный мост (127.0.0.1:$port)"
     }
 
     private fun showSmartSettingsDialog() {
