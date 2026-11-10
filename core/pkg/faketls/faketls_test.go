@@ -151,53 +151,78 @@ func TestFakeTLSConn_FullDuplex(t *testing.T) {
 	tls1 := NewFakeTLSConn(c1)
 	tls2 := NewFakeTLSConn(c2)
 
-	data1 := []byte("ping from side 1")
-	data2 := []byte("pong from side 2")
+	data1 := []byte("ping from tls1 to tls2")
+	data2 := []byte("pong from tls2 to tls1")
 
-	done := make(chan error, 2)
+	readStarted := make(chan struct{})
+	tls1ReadDone := make(chan error, 1)
+	tls1WriteDone := make(chan error, 1)
+	tls2Done := make(chan error, 1)
 
+	// Goroutine 1: tls1.Read starts first and blocks waiting for data from tls2
 	go func() {
-		if _, err := tls1.Write(data1); err != nil {
-			done <- err
-			return
-		}
+		close(readStarted)
 		buf := make([]byte, len(data2))
 		if _, err := io.ReadFull(tls1, buf); err != nil {
-			done <- err
+			tls1ReadDone <- err
 			return
 		}
 		if !bytes.Equal(buf, data2) {
-			done <- fmt.Errorf("side 1 mismatch")
+			tls1ReadDone <- fmt.Errorf("tls1 read mismatch: got %q, want %q", buf, data2)
 			return
 		}
-		done <- nil
+		tls1ReadDone <- nil
 	}()
 
+	// Wait until tls1.Read is actively blocked on underlying socket
+	<-readStarted
+	time.Sleep(50 * time.Millisecond)
+
+	// Goroutine 2: tls2 waits to receive data1 from tls1 before sending data2.
+	// If tls1.Write blocks on a shared mutex while tls1.Read is blocked, deadlock occurs!
 	go func() {
 		buf := make([]byte, len(data1))
 		if _, err := io.ReadFull(tls2, buf); err != nil {
-			done <- err
+			tls2Done <- err
 			return
 		}
 		if !bytes.Equal(buf, data1) {
-			done <- fmt.Errorf("side 2 mismatch")
+			tls2Done <- fmt.Errorf("tls2 read mismatch: got %q, want %q", buf, data1)
 			return
 		}
 		if _, err := tls2.Write(data2); err != nil {
-			done <- err
+			tls2Done <- err
 			return
 		}
-		done <- nil
+		tls2Done <- nil
 	}()
 
-	for i := 0; i < 2; i++ {
+	// Goroutine 3: tls1.Write runs concurrently while tls1.Read is already blocked
+	go func() {
+		if _, err := tls1.Write(data1); err != nil {
+			tls1WriteDone <- err
+			return
+		}
+		tls1WriteDone <- nil
+	}()
+
+	timeout := time.After(2 * time.Second)
+	for i := 0; i < 3; i++ {
 		select {
-		case err := <-done:
+		case err := <-tls1ReadDone:
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("tls1 Read failed: %v", err)
 			}
-		case <-time.After(2 * time.Second):
-			t.Fatal("timeout waiting for full-duplex exchange")
+		case err := <-tls1WriteDone:
+			if err != nil {
+				t.Fatalf("tls1 Write failed: %v", err)
+			}
+		case err := <-tls2Done:
+			if err != nil {
+				t.Fatalf("tls2 exchange failed: %v", err)
+			}
+		case <-timeout:
+			t.Fatal("deadlock detected: Read and Write on same FakeTLSConn blocked each other")
 		}
 	}
 }

@@ -158,9 +158,10 @@ object SettingsManager {
      * Downloads and updates latest Cloudflare gateway mirrors from GitHub.
      */
     suspend fun fetchAndRefreshDomains(context: Context): Result<Int> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-        val url = java.net.URL("$CFPROXY_DOMAINS_URL?cache_bust=${System.currentTimeMillis()}")
-        val conn = url.openConnection() as java.net.HttpURLConnection
+        var conn: java.net.HttpURLConnection? = null
         try {
+            val url = java.net.URL("$CFPROXY_DOMAINS_URL?cache_bust=${System.currentTimeMillis()}")
+            conn = url.openConnection() as java.net.HttpURLConnection
             conn.connectTimeout = 8000
             conn.readTimeout = 8000
             conn.requestMethod = "GET"
@@ -183,7 +184,7 @@ object SettingsManager {
         } catch (e: Exception) {
             Result.failure(e)
         } finally {
-            conn.disconnect()
+            conn?.disconnect()
         }
     }
 

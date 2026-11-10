@@ -338,6 +338,16 @@ func (s *Server) dialFastUpstream(parentCtx context.Context, dcID int, isMedia b
 	var cancelsMu sync.Mutex
 	var candidateWg sync.WaitGroup
 
+	defer func() {
+		cancelsMu.Lock()
+		for _, c := range cancels {
+			if c != nil {
+				c()
+			}
+		}
+		cancelsMu.Unlock()
+	}()
+
 	activeCount := 0
 	candidateIdx := 0
 
@@ -354,7 +364,7 @@ func (s *Server) dialFastUpstream(parentCtx context.Context, dcID int, isMedia b
 
 		activeCount++
 		candidateWg.Add(1)
-		go func(d string, i int, cCtx context.Context) {
+		go func(d string, i int, cCtx context.Context, cCancel context.CancelFunc) {
 			defer candidateWg.Done()
 			domainTimeout := 4 * time.Second
 			if IsDirectDomain(d) {
@@ -378,11 +388,12 @@ func (s *Server) dialFastUpstream(parentCtx context.Context, dcID int, isMedia b
 				if wsConn != nil {
 					_ = wsConn.Close()
 				}
+				cCancel()
 				return
 			}
 
 			resultCh <- dialResult{ws: wsConn, domain: d, err: err, index: i}
-		}(domain, idx, candCtx)
+		}(domain, idx, candCtx, cancel)
 	}
 
 	// Start first candidate immediately
@@ -425,10 +436,9 @@ func (s *Server) dialFastUpstream(parentCtx context.Context, dcID int, isMedia b
 		case res := <-resultCh:
 			activeCount--
 			if res.err == nil && res.ws != nil {
-				// Cancel ONLY losing candidates, NOT the winner!
 				cancelsMu.Lock()
-				for i, c := range cancels {
-					if i != res.index && c != nil {
+				for _, c := range cancels {
+					if c != nil {
 						c()
 					}
 				}

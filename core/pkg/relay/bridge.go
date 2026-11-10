@@ -53,6 +53,11 @@ func BridgeWS(
 		defer cancel()
 
 		buf := make([]byte, 65536)
+		var plainBuf []byte
+		if splitter != nil {
+			plainBuf = make([]byte, 65536)
+		}
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -66,7 +71,7 @@ func BridgeWS(
 				stats.AddBytesUp(n)
 
 				if splitter != nil {
-					plain := make([]byte, n)
+					plain := plainBuf[:n]
 					cryptoCtx.CltDec.XORKeyStream(plain, chunk)
 					cryptoCtx.TgEnc.XORKeyStream(chunk, plain)
 

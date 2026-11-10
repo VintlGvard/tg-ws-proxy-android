@@ -109,6 +109,9 @@ func TestMsgSplitter_IncompleteAbridgedCompaction(t *testing.T) {
 	// Incomplete packet: 10 words (40 bytes payload) + 1 byte header = 41 bytes
 	pkt := make([]byte, 41)
 	pkt[0] = 10
+	for i := 1; i < len(pkt); i++ {
+		pkt[i] = byte((i*7 + 13)%251 + 1)
+	}
 
 	// Send first 15 bytes
 	p1 := s.Split(pkt[:15], pkt[:15])
@@ -123,6 +126,9 @@ func TestMsgSplitter_IncompleteAbridgedCompaction(t *testing.T) {
 	}
 	if len(p2[0]) != 41 {
 		t.Fatalf("expected 41 bytes, got %d", len(p2[0]))
+	}
+	if !bytes.Equal(p2[0], pkt) {
+		t.Fatalf("compacted payload corrupted: got %x, want %x", p2[0], pkt)
 	}
 }
 
