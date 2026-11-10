@@ -107,7 +107,7 @@ func (s *Server) handleClient(ctx context.Context, rawConn net.Conn) {
 	}
 
 	var clientConn net.Conn = rawConn
-	handshake := make([]byte, proto.HandshakeLen)
+	var handshake [proto.HandshakeLen]byte
 
 	if firstByte[0] == faketls.TLSRecordHandshake && s.cfg.IsFakeTLS {
 		// Fake TLS ClientHello flow
@@ -148,7 +148,7 @@ func (s *Server) handleClient(ctx context.Context, rawConn net.Conn) {
 		clientConn = fakeConn
 
 		_ = rawConn.SetDeadline(time.Now().Add(s.cfg.Timeout))
-		if _, err := io.ReadFull(fakeConn, handshake); err != nil {
+		if _, err := io.ReadFull(fakeConn, handshake[:]); err != nil {
 			log.Printf("[Proxy] Failed to read MTProto init inside TLS: %v", err)
 			return
 		}
@@ -169,7 +169,7 @@ func (s *Server) handleClient(ctx context.Context, rawConn net.Conn) {
 	_ = clientConn.SetDeadline(time.Time{})
 
 	// Parse MTProto handshake
-	res, err := crypto.TryHandshake(handshake, s.cfg.SecretBytes)
+	res, err := crypto.TryHandshake(handshake[:], s.cfg.SecretBytes)
 	if err != nil {
 		relay.GlobalStats.IncConnectionsBad()
 		log.Printf("[Proxy] Bad handshake: %v", err)

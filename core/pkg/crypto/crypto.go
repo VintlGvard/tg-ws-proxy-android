@@ -129,27 +129,17 @@ func GenerateRelayInit(protoTag [4]byte, dcIdx int16) ([]byte, error) {
 	encryptedFull := make([]byte, proto.HandshakeLen)
 	stream.XORKeyStream(encryptedFull, rnd)
 
-	tailPlain := make([]byte, 8)
+	var tailPlain [8]byte
 	copy(tailPlain[0:4], protoTag[:])
 	binary.LittleEndian.PutUint16(tailPlain[4:6], uint16(dcIdx))
 	if _, err := io.ReadFull(rand.Reader, tailPlain[6:8]); err != nil {
 		return nil, err
 	}
 
-	keystreamTail := make([]byte, 8)
 	for i := 0; i < 8; i++ {
-		keystreamTail[i] = encryptedFull[56+i] ^ rnd[56+i]
+		rnd[proto.ProtoTagPos+i] = tailPlain[i] ^ encryptedFull[proto.ProtoTagPos+i] ^ rnd[proto.ProtoTagPos+i]
 	}
-
-	encryptedTail := make([]byte, 8)
-	for i := 0; i < 8; i++ {
-		encryptedTail[i] = tailPlain[i] ^ keystreamTail[i]
-	}
-
-	result := make([]byte, proto.HandshakeLen)
-	copy(result, rnd)
-	copy(result[proto.ProtoTagPos:proto.HandshakeLen], encryptedTail)
-	return result, nil
+	return rnd, nil
 }
 
 // CryptoContext contains 4 streaming ciphers for client and Telegram directions.
