@@ -185,8 +185,8 @@ func NewCryptoContext(clientDecPrekeyIV, secret, relayInit []byte) (*CryptoConte
 	cltDec := cipher.NewCTR(cltDecBlock, cltDecIV)
 
 	// Fast-forward client decryptor past 64-byte init
-	zero64 := make([]byte, proto.HandshakeLen)
-	cltDec.XORKeyStream(zero64, zero64)
+	var zero64 [proto.HandshakeLen]byte
+	cltDec.XORKeyStream(zero64[:], zero64[:])
 
 	cltEncPrekeyIV := reverseBytes(clientDecPrekeyIV)
 	h2 := sha256.New()
@@ -211,8 +211,8 @@ func NewCryptoContext(clientDecPrekeyIV, secret, relayInit []byte) (*CryptoConte
 	tgEnc := cipher.NewCTR(tgEncBlock, relayEncIV)
 
 	// Fast-forward Telegram encryptor past 64-byte init
-	zero64TG := make([]byte, proto.HandshakeLen)
-	tgEnc.XORKeyStream(zero64TG, zero64TG)
+	var zero64TG [proto.HandshakeLen]byte
+	tgEnc.XORKeyStream(zero64TG[:], zero64TG[:])
 
 	relayDecPrekeyIV := reverseBytes(relayInit[proto.SkipLen : proto.SkipLen+proto.PrekeyLen+proto.IVLen])
 	relayDecKey := relayDecPrekeyIV[:proto.KeyLen]

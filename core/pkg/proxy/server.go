@@ -336,6 +336,7 @@ func (s *Server) dialFastUpstream(parentCtx context.Context, dcID int, isMedia b
 	resultCh := make(chan dialResult, len(domains))
 	cancels := make([]context.CancelFunc, len(domains))
 	var cancelsMu sync.Mutex
+	var candidateWg sync.WaitGroup
 
 	activeCount := 0
 	candidateIdx := 0
@@ -352,7 +353,9 @@ func (s *Server) dialFastUpstream(parentCtx context.Context, dcID int, isMedia b
 		cancelsMu.Unlock()
 
 		activeCount++
+		candidateWg.Add(1)
 		go func(d string, i int, cCtx context.Context) {
+			defer candidateWg.Done()
 			domainTimeout := 4 * time.Second
 			if IsDirectDomain(d) {
 				domainTimeout = 1500 * time.Millisecond
@@ -401,6 +404,15 @@ func (s *Server) dialFastUpstream(parentCtx context.Context, dcID int, isMedia b
 				}
 			}
 			cancelsMu.Unlock()
+			go func() {
+				candidateWg.Wait()
+				for len(resultCh) > 0 {
+					extra := <-resultCh
+					if extra.ws != nil {
+						_ = extra.ws.Close()
+					}
+				}
+			}()
 			return nil, "", parentCtx.Err()
 
 		case <-ticker.C:
@@ -424,17 +436,27 @@ func (s *Server) dialFastUpstream(parentCtx context.Context, dcID int, isMedia b
 
 				globalBalancer.RecordSuccess(dcID, res.domain)
 
-				// Background drain for excess connections
+				// Deterministic background drain for excess connections
 				go func(winnerIndex int) {
-					timer := time.NewTimer(2 * time.Second)
-					defer timer.Stop()
-					for i := 0; i < len(domains)-1; i++ {
+					done := make(chan struct{})
+					go func() {
+						candidateWg.Wait()
+						close(done)
+					}()
+
+					for {
 						select {
 						case extra := <-resultCh:
 							if extra.index != winnerIndex && extra.ws != nil {
 								_ = extra.ws.Close()
 							}
-						case <-timer.C:
+						case <-done:
+							for len(resultCh) > 0 {
+								extra := <-resultCh
+								if extra.index != winnerIndex && extra.ws != nil {
+									_ = extra.ws.Close()
+								}
+							}
 							return
 						}
 					}

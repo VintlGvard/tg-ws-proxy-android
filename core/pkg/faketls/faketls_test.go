@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"net"
 	"testing"
@@ -139,5 +140,64 @@ func TestFakeTLSConn_Pipe(t *testing.T) {
 	io.ReadFull(clientPipe, payload)
 	if !bytes.Equal(payload, msg) {
 		t.Fatalf("payload mismatch")
+	}
+}
+
+func TestFakeTLSConn_FullDuplex(t *testing.T) {
+	c1, c2 := net.Pipe()
+	defer c1.Close()
+	defer c2.Close()
+
+	tls1 := NewFakeTLSConn(c1)
+	tls2 := NewFakeTLSConn(c2)
+
+	data1 := []byte("ping from side 1")
+	data2 := []byte("pong from side 2")
+
+	done := make(chan error, 2)
+
+	go func() {
+		if _, err := tls1.Write(data1); err != nil {
+			done <- err
+			return
+		}
+		buf := make([]byte, len(data2))
+		if _, err := io.ReadFull(tls1, buf); err != nil {
+			done <- err
+			return
+		}
+		if !bytes.Equal(buf, data2) {
+			done <- fmt.Errorf("side 1 mismatch")
+			return
+		}
+		done <- nil
+	}()
+
+	go func() {
+		buf := make([]byte, len(data1))
+		if _, err := io.ReadFull(tls2, buf); err != nil {
+			done <- err
+			return
+		}
+		if !bytes.Equal(buf, data1) {
+			done <- fmt.Errorf("side 2 mismatch")
+			return
+		}
+		if _, err := tls2.Write(data2); err != nil {
+			done <- err
+			return
+		}
+		done <- nil
+	}()
+
+	for i := 0; i < 2; i++ {
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("timeout waiting for full-duplex exchange")
+		}
 	}
 }
